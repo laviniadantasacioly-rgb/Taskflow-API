@@ -81,9 +81,9 @@ const tarefaModel = {
     ordem,
   }) => {
     const prioridadesIds = {
-      baixa: 1,
+      alta: 1,
       media: 2,
-      alta: 3,
+      baixa: 3,
     };
 
     const prioridadeId = prioridade_id ?? prioridadesIds[prioridade || "media"];
@@ -137,9 +137,9 @@ const tarefaModel = {
     } = dados;
 
     const prioridadesIds = {
-      baixa: 1,
+      alta: 1,
       media: 2,
-      alta: 3,
+      baixa: 3,
     };
 
     const prioridadeId =
@@ -237,9 +237,15 @@ const tarefaModel = {
     };
 
     const porPrioridade = {
-      alta: tarefas.filter((t) => t.prioridades?.descricao === "alta").length,
-      media: tarefas.filter((t) => t.prioridades?.descricao === "media").length,
-      baixa: tarefas.filter((t) => t.prioridades?.descricao === "baixa").length,
+      alta: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "alta",
+      ).length,
+      media: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "média",
+      ).length,
+      baixa: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "baixa",
+      ).length,
     };
 
     const comMaisTarefas = Object.entries(porColuna).sort(
@@ -276,9 +282,15 @@ const tarefaModel = {
     const concluido = tarefas.filter((t) => t.coluna === "concluido").length;
 
     const prioridades = {
-      alta: tarefas.filter((t) => t.prioridades?.descricao === "alta").length,
-      media: tarefas.filter((t) => t.prioridades?.descricao === "media").length,
-      baixa: tarefas.filter((t) => t.prioridades?.descricao === "baixa").length,
+      alta: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "alta",
+      ).length,
+      media: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "média",
+      ).length,
+      baixa: tarefas.filter(
+        (t) => t.prioridades?.descricao.toLowerCase() === "baixa",
+      ).length,
     };
 
     const prioridadeMaisComum = Object.entries(prioridades).sort(

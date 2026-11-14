@@ -45,10 +45,9 @@ describe("validar", () => {
     expect(erro.detalhes).toEqual([
       "O campo 'texto' é obrigatório",
       "O campo 'prioridade_id' é obrigatório",
-      "O campo 'coluna' é obrigatório",
-      "O campo 'usuario_id' é obrigatório",
       "O campo 'projeto_id' é obrigatório",
     ]);
+
     expect(next).not.toHaveBeenCalled();
   });
 
@@ -115,5 +114,53 @@ describe("validar", () => {
     middleware(req, {}, next);
 
     expect(next).toHaveBeenCalledTimes(1);
+  });
+
+  test("tarefaId da URL: aceita número inteiro válido", () => {
+    const middleware = validar(schemas.tarefaId, "params");
+    const next = jest.fn();
+
+    middleware({ params: { tarefaId: "7" } }, {}, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith();
+  });
+
+  test("tarefaId da URL: barra valor inválido", () => {
+    const middleware = validar(schemas.tarefaId, "params");
+    const next = jest.fn();
+
+    const erro = pegarErro(() =>
+      middleware({ params: { tarefaId: "abc" } }, {}, next),
+    );
+
+    expect(erro.status).toBe(400);
+    expect(erro.detalhes).toEqual([
+      "O campo 'tarefaId' deve ser um número inteiro positivo",
+    ]);
+
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("comentário sem texto: retorna erro de campo obrigatório", () => {
+    const middleware = validar(schemas.comentario);
+    const next = jest.fn();
+
+    const erro = pegarErro(() => middleware({ body: {} }, {}, next));
+
+    expect(erro.status).toBe(400);
+    expect(erro.detalhes).toEqual(["O campo 'texto' é obrigatório"]);
+
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test("comentário com texto: chama next", () => {
+    const middleware = validar(schemas.comentario);
+    const next = jest.fn();
+
+    middleware({ body: { texto: "Comentário de teste" } }, {}, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledWith();
   });
 });

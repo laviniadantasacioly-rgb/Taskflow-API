@@ -1,13 +1,14 @@
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const usuarioModel = require("../models/usuario.model");
 
 const authController = {
   async login(req, res) {
     try {
-      const { email, senha_hash } = req.body;
+      const { email, senha } = req.body;
 
       // 1. Validar os campos
-      if (!email || !senha_hash) {
+      if (!email || !senha) {
         return res.status(400).json({
           erro: "Email e senha são obrigatórios",
         });
@@ -24,7 +25,13 @@ const authController = {
         });
       }
 
-      if (usuario.senha_hash !== senha_hash) {
+      // 3. Verificar a senha com bcrypt
+      const senhaCorreta = await bcrypt.compare(
+        senha,
+        usuario.senha_hash
+      );
+
+      if (!senhaCorreta) {
         return res.status(401).json({
           erro: {
             mensagem: "E-mail ou senha incorretos",

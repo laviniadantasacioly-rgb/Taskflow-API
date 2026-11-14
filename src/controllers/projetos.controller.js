@@ -1,13 +1,15 @@
+
 const projetoModel = require("../models/projeto.model");
 const tarefaModel = require("../models/tarefa.model");
 
 const projetosController = {
-  // GET - MOSTRAR PROJETOS
+  // GET - MOSTRAR PROJETOS DO USUÁRIO AUTENTICADO
   async listarProjetos(req, res) {
     try {
-      const projetos = await projetoModel.listarProjetos();
+      const projetos = await projetoModel.listarProjetos(req.usuario.id);
       res.json(projetos);
     } catch (erro) {
+      console.error("Erro ao listar projetos:", erro);
       res.status(500).json({ erro: "Erro ao listar projetos" });
     }
   },
@@ -16,7 +18,11 @@ const projetosController = {
   async resumoProjeto(req, res) {
     try {
       const id = Number(req.params.id);
-      const projeto = await projetoModel.buscarProjeto(id);
+
+      const projeto = await projetoModel.buscarProjeto(
+        id,
+        req.usuario.id
+      );
 
       if (!projeto) {
         return res.status(404).json({
@@ -27,17 +33,21 @@ const projetosController = {
       const tarefas = await tarefaModel.listar();
 
       const tarefasDoProjeto = tarefas.filter(
-        (t) => Number(t.projeto_id ?? t.projetoId) === id,
+        (t) => Number(t.projeto_id ?? t.projetoId) === id
       );
 
       const porColuna = {
-        afazer: tarefasDoProjeto.filter((t) => t.coluna === "afazer").length,
+        afazer: tarefasDoProjeto.filter(
+          (t) => t.coluna === "afazer"
+        ).length,
 
-        andamento: tarefasDoProjeto.filter((t) => t.coluna === "andamento")
-          .length,
+        andamento: tarefasDoProjeto.filter(
+          (t) => t.coluna === "andamento"
+        ).length,
 
-        concluido: tarefasDoProjeto.filter((t) => t.coluna === "concluido")
-          .length,
+        concluido: tarefasDoProjeto.filter(
+          (t) => t.coluna === "concluido"
+        ).length,
       };
 
       res.json({
@@ -46,15 +56,22 @@ const projetosController = {
         porColuna,
       });
     } catch (erro) {
-      res.status(500).json({ erro: "Erro ao buscar resumo do projeto" });
+      console.error("Erro ao buscar resumo do projeto:", erro);
+      res.status(500).json({
+        erro: "Erro ao buscar resumo do projeto",
+      });
     }
   },
 
-  // GET - BUSCAR POR ID
+  // GET - BUSCAR PROJETO POR ID
   async buscarProjetosId(req, res) {
     try {
       const id = Number(req.params.id);
-      const projeto = await projetoModel.buscarProjeto(id);
+
+      const projeto = await projetoModel.buscarProjeto(
+        id,
+        req.usuario.id
+      );
 
       if (!projeto) {
         return res.status(404).json({
@@ -64,24 +81,22 @@ const projetosController = {
 
       res.json(projeto);
     } catch (erro) {
-      res.status(500).json({ erro: "Erro ao buscar projeto" });
+      console.error("Erro ao buscar projeto:", erro);
+      res.status(500).json({
+        erro: "Erro ao buscar projeto",
+      });
     }
   },
 
-  // POST - CRIAR NOVOS PROJETOS
+  // POST - CRIAR NOVO PROJETO
   async criarProjetos(req, res) {
     try {
-      const { nome, descricao, usuarioId } = req.body;
+      const { nome, descricao } = req.body;
+      const usuarioId = req.usuario.id;
 
       if (!nome || nome.trim() === "") {
         return res.status(400).json({
           erro: "Obrigatório informar o nome do projeto!",
-        });
-      }
-
-      if (!usuarioId) {
-        return res.status(400).json({
-          erro: "Obrigatório informar o usuário responsável pelo projeto!",
         });
       }
 
@@ -94,41 +109,64 @@ const projetosController = {
       res.status(201).json(novoProjeto);
     } catch (erro) {
       console.error("Erro ao criar projeto:", erro);
-      res.status(500).json({ erro: "Erro ao criar projeto" });
+      res.status(500).json({
+        erro: "Erro ao criar projeto",
+      });
     }
   },
 
-  // PUT - EDITAR PROJETOS
+  // PUT - EDITAR PROJETO
   async atualizarProjetos(req, res) {
     try {
       const id = Number(req.params.id);
 
-      const projetoExistente = await projetoModel.buscarProjeto(id);
+      const projetoExistente = await projetoModel.buscarProjeto(
+        id,
+        req.usuario.id
+      );
 
       if (!projetoExistente) {
         return res.status(404).json({
-          mensagem: "Projeto não encontrado",
+          erro: "Projeto não encontrado",
         });
       }
 
-      const atualizado = await projetoModel.atualizarProjeto(id, req.body);
+      const { nome, descricao } = req.body;
+
+      const atualizado = await projetoModel.atualizarProjeto(id, {
+        nome,
+        descricao,
+      });
 
       res.json(atualizado);
     } catch (erro) {
       console.error("Erro ao atualizar projeto:", erro);
-      res.status(500).json({ erro: "Erro ao atualizar projeto" });
+      res.status(500).json({
+        erro: "Erro ao atualizar projeto",
+      });
     }
   },
 
-  // DELETE - APAGAR PROJETOS
+  // DELETE - REMOVER PROJETO
   async removerProjetos(req, res) {
     try {
       const id = Number(req.params.id);
 
+      const projeto = await projetoModel.buscarProjeto(
+        id,
+        req.usuario.id
+      );
+
+      if (!projeto) {
+        return res.status(404).json({
+          erro: "Projeto não encontrado",
+        });
+      }
+
       const tarefas = await tarefaModel.listar();
 
       const tarefasDoProjeto = tarefas.filter(
-        (t) => Number(t.projeto_id ?? t.projetoId) === id,
+        (t) => Number(t.projeto_id ?? t.projetoId) === id
       );
 
       if (tarefasDoProjeto.length > 0) {
@@ -141,7 +179,7 @@ const projetosController = {
 
       if (!removido) {
         return res.status(404).json({
-          mensagem: "Projeto não encontrado",
+          erro: "Projeto não encontrado",
         });
       }
 
@@ -150,8 +188,10 @@ const projetosController = {
         projeto: removido,
       });
     } catch (erro) {
-      console.error("Erro ao criar projeto:", erro);
-      res.status(500).json({ erro: "Erro ao criar projeto" });
+      console.error("Erro ao remover projeto:", erro);
+      res.status(500).json({
+        erro: "Erro ao remover projeto",
+      });
     }
   },
 };

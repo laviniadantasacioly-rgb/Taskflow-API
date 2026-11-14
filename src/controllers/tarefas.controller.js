@@ -1,24 +1,42 @@
+
 const tarefaModel = require("../models/tarefa.model");
-const usuarioModel = require("../models/usuario.model");
+const projetoModel = require("../models/projeto.model");
+const prioridadeModel = require("../models/prioridade.model");
 const criarErro = require("../../utils/criarErro");
 
+const COLUNAS_VALIDAS = ["afazer", "andamento", "concluido"];
+
+function contarPorColuna(tarefas) {
+  return {
+    afazer: tarefas.filter((t) => t.coluna === "afazer").length,
+    andamento: tarefas.filter((t) => t.coluna === "andamento").length,
+    concluido: tarefas.filter((t) => t.coluna === "concluido").length,
+  };
+}
+
+function contarPorPrioridade(tarefas) {
+  return tarefas.reduce((resultado, tarefa) => {
+    const descricao = tarefa.prioridade || "Sem prioridade";
+
+    resultado[descricao] = (resultado[descricao] || 0) + 1;
+
+    return resultado;
+  }, {});
+}
+
 const tarefasController = {
-  // GET - LISTAR TAREFAS
+  // GET - LISTAR TAREFAS DO USUÁRIO AUTENTICADO
   async listar(req, res) {
     try {
-      const { coluna, usuarioId } = req.query;
+      const usuarioId = req.usuario.id;
+      const { coluna } = req.query;
 
-      let resultado;
+      let resultado = await tarefaModel.listarPorUsuario(usuarioId);
 
-      if (usuarioId && coluna) {
-        const tarefasUsuario = await tarefaModel.listarPorUsuario(usuarioId);
-        resultado = tarefasUsuario.filter((tarefa) => tarefa.coluna === coluna);
-      } else if (usuarioId) {
-        resultado = await tarefaModel.listarPorUsuario(usuarioId);
-      } else if (coluna) {
-        resultado = await tarefaModel.listarPorColuna(coluna);
-      } else {
-        resultado = await tarefaModel.listar();
+      if (coluna) {
+        resultado = resultado.filter(
+          (tarefa) => tarefa.coluna === coluna
+        );
       }
 
       res.json(resultado);
@@ -27,49 +45,70 @@ const tarefasController = {
     }
   },
 
-  // GET - ESTATISTICAS
+  // GET - ESTATÍSTICAS DO USUÁRIO AUTENTICADO
   async estatisticas(req, res) {
     try {
-      const estatisticas = await tarefaModel.estatisticas();
-      const usuarios = await usuarioModel.listarUsuarios();
-
-      const rankingUsuarios = await Promise.all(
-        usuarios.map(async (usuario) => {
-          const tarefas = await tarefaModel.listarPorUsuario(usuario.id);
-
-          return {
-            usuarioId: usuario.id,
-            nome: usuario.nome,
-            totalTarefas: tarefas.length,
-          };
-        }),
+      const tarefas = await tarefaModel.listarPorUsuario(
+        req.usuario.id
       );
 
-      rankingUsuarios.sort((a, b) => b.totalTarefas - a.totalTarefas);
+      const porColuna = contarPorColuna(tarefas);
+      const porPrioridade = contarPorPrioridade(tarefas);
+
+      const comMaisTarefas = Object.entries(porColuna).sort(
+        (a, b) => b[1] - a[1]
+      );
 
       res.json({
-        ...estatisticas,
-        rankingUsuarios,
+        total: tarefas.length,
+        porColuna,
+        porPrioridade,
+        "Mais Tarefas": comMaisTarefas,
       });
     } catch (erro) {
       throw erro;
     }
   },
 
-  // GET - RESUMO
+  // GET - RESUMO DAS TAREFAS DO USUÁRIO AUTENTICADO
   async resumo(req, res) {
     try {
-      const resumo = await tarefaModel.resumo();
-      res.json(resumo);
+      const tarefas = await tarefaModel.listarPorUsuario(
+        req.usuario.id
+      );
+
+      const porColuna = contarPorColuna(tarefas);
+      const porPrioridade = contarPorPrioridade(tarefas);
+
+      const prioridadeMaisComum = Object.entries(porPrioridade)
+        .sort((a, b) => b[1] - a[1])[0];
+
+      const nomePrioridade = prioridadeMaisComum
+        ? prioridadeMaisComum[0]
+        : "nenhuma";
+
+      const mensagem =
+        `Você tem ${tarefas.length} tarefa(s): ` +
+        `${porColuna.concluido} concluída(s), ` +
+        `${porColuna.andamento} em andamento e ` +
+        `${porColuna.afazer} a fazer. ` +
+        `A prioridade mais comum: ${nomePrioridade}.`;
+
+      res.json(mensagem);
     } catch (erro) {
       throw erro;
     }
   },
 
-  // GET - BUSCAR POR ID
+  // GET - BUSCAR TAREFA POR ID
   async buscarPorId(req, res) {
     try {
-      const tarefa = await tarefaModel.buscar(parseInt(req.params.id, 10));
+      const id = Number(req.params.id);
+
+      const tarefa = await tarefaModel.buscar(
+        id,
+        req.usuario.id
+      );
 
       if (!tarefa) {
         throw criarErro(404, "Tarefa não encontrada");
@@ -84,47 +123,70 @@ const tarefasController = {
   // POST - CRIAR TAREFA
   async criar(req, res) {
     try {
-      const { texto, prioridade_id, prioridade, coluna, projeto_id } = req.body;
+      const {
+        texto,
+        prioridade_id,
+        coluna,
+        projeto_id,
+        ordem,
+      } = req.body;
 
       const usuarioId = req.usuario.id;
 
-      if (!texto) {
-        return res.status(400).json({
-          erro: "Texto obrigatório",
-        });
-      }
-
-      if (projeto_id == null) {
-        return res.status(400).json({
-          erro: "O projeto é obrigatório",
-        });
+      if (typeof texto !== "string" || !texto.trim()) {
+        throw criarErro(400, "Texto obrigatório");
       }
 
       if (
-        prioridade !== undefined &&
-        !["alta", "media", "baixa"].includes(prioridade)
+        !Number.isInteger(Number(projeto_id)) ||
+        Number(projeto_id) <= 0
       ) {
-        return res.status(400).json({
-          erro: "Prioridade inválida. Use: alta, media ou baixa",
-        });
+        throw criarErro(400, "Projeto inválido");
       }
 
       if (
-        coluna !== undefined &&
-        !["afazer", "andamento", "concluido"].includes(coluna)
+        !Number.isInteger(Number(prioridade_id)) ||
+        Number(prioridade_id) <= 0
       ) {
-        return res.status(400).json({
-          erro: "Coluna inválida. Use: afazer, andamento ou concluido",
-        });
+        throw criarErro(400, "Prioridade inválida");
+      }
+
+      if (coluna !== undefined && !COLUNAS_VALIDAS.includes(coluna)) {
+        throw criarErro(400, "Coluna inválida");
+      }
+
+      if (
+        ordem !== undefined &&
+        (!Number.isInteger(Number(ordem)) || Number(ordem) < 0)
+      ) {
+        throw criarErro(400, "Ordem inválida");
+      }
+
+      const projeto = await projetoModel.buscarProjeto(
+        Number(projeto_id),
+        usuarioId
+      );
+
+      if (!projeto) {
+        throw criarErro(404, "Projeto não encontrado");
+      }
+
+      // Verificar se a prioridade existe e está ativa
+      const prioridade = await prioridadeModel.buscarAtiva(
+        Number(prioridade_id)
+      );
+
+      if (!prioridade) {
+        throw criarErro(400, "Prioridade inválida ou inativa");
       }
 
       const novaTarefa = await tarefaModel.adicionar({
-        texto,
-        prioridade_id,
-        prioridade,
+        texto: texto.trim(),
+        prioridade_id: Number(prioridade_id),
         coluna,
         usuarioId,
-        projetoId: projeto_id,
+        projetoId: Number(projeto_id),
+        ordem,
       });
 
       res.status(201).json(novaTarefa);
@@ -133,44 +195,110 @@ const tarefasController = {
     }
   },
 
-  // PUT - EDITAR TAREFA
+  // PUT - ATUALIZAR TAREFA
   async atualizar(req, res) {
     try {
-      const id = parseInt(req.params.id, 10);
-      const tarefa = await tarefaModel.buscar(id);
+      const id = Number(req.params.id);
+
+      const tarefa = await tarefaModel.buscar(
+        id,
+        req.usuario.id
+      );
 
       if (!tarefa) {
         throw criarErro(404, "Tarefa não encontrada");
       }
 
-      const { prioridade, coluna } = req.body;
+      const {
+        texto,
+        prioridade_id,
+        coluna,
+        projeto_id,
+        ordem,
+      } = req.body;
 
-      // Validar prioridade
       if (
-        prioridade !== undefined &&
-        !["alta", "media", "baixa"].includes(prioridade)
+        texto !== undefined &&
+        (typeof texto !== "string" || !texto.trim())
       ) {
-        return res.status(400).json({
-          erro: "Prioridade inválida. Use: alta, media ou baixa",
-        });
+        throw criarErro(400, "Texto inválido");
       }
 
-      // Validar coluna
       if (
-        coluna !== undefined &&
-        !["afazer", "andamento", "concluido"].includes(coluna)
+        prioridade_id !== undefined &&
+        (!Number.isInteger(Number(prioridade_id)) ||
+          Number(prioridade_id) <= 0)
       ) {
-        return res.status(400).json({
-          erro: "Coluna inválida. Use: afazer, andamento ou concluido",
-        });
+        throw criarErro(400, "Prioridade inválida");
       }
 
-      const dadosAtualizacao = { ...req.body };
+      if (coluna !== undefined && !COLUNAS_VALIDAS.includes(coluna)) {
+        throw criarErro(400, "Coluna inválida");
+      }
 
-      delete dadosAtualizacao.concluidaEm;
-      delete dadosAtualizacao.concluida_em;
+      if (
+        ordem !== undefined &&
+        (!Number.isInteger(Number(ordem)) || Number(ordem) < 0)
+      ) {
+        throw criarErro(400, "Ordem inválida");
+      }
 
-      const atualizada = await tarefaModel.atualizar(id, dadosAtualizacao);
+      if (projeto_id !== undefined) {
+        if (
+          !Number.isInteger(Number(projeto_id)) ||
+          Number(projeto_id) <= 0
+        ) {
+          throw criarErro(400, "Projeto inválido");
+        }
+
+        const projeto = await projetoModel.buscarProjeto(
+          Number(projeto_id),
+          req.usuario.id
+        );
+
+        if (!projeto) {
+          throw criarErro(404, "Projeto não encontrado");
+        }
+      }
+
+      // Verificar a prioridade somente quando ela for alterada
+      if (prioridade_id !== undefined) {
+        const prioridade = await prioridadeModel.buscarAtiva(
+          Number(prioridade_id)
+        );
+
+        if (!prioridade) {
+          throw criarErro(400, "Prioridade inválida ou inativa");
+        }
+      }
+
+      const dadosAtualizacao = {};
+
+      if (texto !== undefined) {
+        dadosAtualizacao.texto = texto.trim();
+      }
+
+      if (prioridade_id !== undefined) {
+        dadosAtualizacao.prioridade_id = Number(prioridade_id);
+      }
+
+      if (coluna !== undefined) {
+        dadosAtualizacao.coluna = coluna;
+      }
+
+      if (projeto_id !== undefined) {
+        dadosAtualizacao.projeto_id = Number(projeto_id);
+      }
+
+      if (ordem !== undefined) {
+        dadosAtualizacao.ordem = Number(ordem);
+      }
+
+      const atualizada = await tarefaModel.atualizar(
+        id,
+        dadosAtualizacao,
+        req.usuario.id
+      );
 
       if (!atualizada) {
         throw criarErro(404, "Tarefa não encontrada");
@@ -182,17 +310,21 @@ const tarefasController = {
     }
   },
 
-  // DELETE - DELETAR TAREFA
+  // DELETE - REMOVER TAREFA
   async remover(req, res) {
     try {
-      const id = parseInt(req.params.id, 10);
-      const tarefa = await tarefaModel.buscar(id);
+      const id = Number(req.params.id);
+
+      const tarefa = await tarefaModel.buscar(
+        id,
+        req.usuario.id
+      );
 
       if (!tarefa) {
         throw criarErro(404, "Tarefa não encontrada");
       }
 
-      await tarefaModel.remover(id);
+      await tarefaModel.remover(id, req.usuario.id);
 
       res.status(200).json({
         mensagem: "Tarefa excluída com sucesso",

@@ -12,18 +12,29 @@ const prioridadeModel = {
       LEFT JOIN prioridades p
         ON p.id = t.prioridade_id
       ORDER BY
-        CASE p.descricao
-          WHEN 'alta' THEN 1
-          WHEN 'media' THEN 2
-          WHEN 'baixa' THEN 3
-          ELSE 4
-        END,
-        t.id
+        CASE LOWER(p.descricao)
+  WHEN 'alta' THEN 1
+  WHEN 'média' THEN 2
+  WHEN 'baixa' THEN 3
+  ELSE 4
+END
     `);
 
     return result.rows;
   },
-  
+
+    // Buscar prioridade ativa pelo ID
+  async buscarAtiva(id) {
+    const result = await pool.query(
+      `SELECT id, descricao, cor
+       FROM prioridades
+       WHERE id = $1 AND ativo = TRUE`,
+      [id],
+    );
+
+    return result.rows[0] || null;
+  },
+
   // Listar os níveis de prioridade
   async listarTodas() {
     return prisma.prioridades.findMany({
@@ -33,11 +44,10 @@ const prioridadeModel = {
         cor: true,
       },
       orderBy: {
-        id: 'asc',
+        id: "asc",
       },
     });
   },
-
 
   // Cadastrar prioridade
   async criar({ descricao, cor }) {

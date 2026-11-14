@@ -1,4 +1,5 @@
-//  CARREGAR VARIÁVEIS DO .ENV
+
+// CARREGAR VARIÁVEIS DO .ENV
 require("dotenv").config();
 
 // CONFIGURAÇÃO DO EXPRESS
@@ -13,12 +14,14 @@ const usuariosRoutes = require("./src/routes/usuarios.routes");
 const projetosRoutes = require("./src/routes/projetos.routes");
 const authRoutes = require("./src/routes/auth.routes");
 const prioridadesRoutes = require("./src/routes/prioridades.routes");
+const comentariosRoutes = require("./src/routes/comentarios.routes");
 
 // REQUIRE DO SWAGGER
 const swaggerUi = require("swagger-ui-express");
 const openapi = require("./src/docs/openapi");
 
-const SWAGGER_CDN = "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14";
+const SWAGGER_CDN =
+  "https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14";
 
 app.use(
   "/docs",
@@ -63,7 +66,7 @@ app.use(
   }),
 );
 
-// Permite que o Express receba dados em JSON
+// PERMITE QUE O EXPRESS RECEBA DADOS EM JSON
 app.use(express.json());
 
 // MIDDLEWARES
@@ -71,29 +74,36 @@ app.use(validarContentType);
 app.use(logger);
 app.use(temporizador);
 
-//ROTA DE LOGIN
+// ROTA DE LOGIN
 app.use("/auth", authRoutes);
 
-//  ROTA INICIAL DA API
+// ROTA INICIAL DA API
 app.get("/", (req, res) => {
   res.json({ api: "TaskFlow", versao: "1.0", status: "online" });
 });
 
-// IMPORTAR - USUÁRIOS ROUTER
+// ROTAS DE USUÁRIOS
 app.use("/usuarios", usuariosRoutes);
 
-// ROUTER.GET VIRA GET /TAREFAS - TAREFAS ROUTES
+// ROTAS DE TAREFAS
 app.use("/tarefas", autenticar, tarefasRoutes);
 
+// ROTAS DE COMENTÁRIOS
+app.use("/comentarios", autenticar, comentariosRoutes);
+
+// ROTAS DE PROJETOS
 app.use("/projetos", autenticar, projetosRoutes);
 
+// ROTAS DE PRIORIDADES
 app.use("/prioridades", prioridadesRoutes);
 
+// ROTA NÃO ENCONTRADA
 app.use((req, res) => {
   const rota = `${req.method} ${req.url}`;
   throw criarErro(404, `Rota ${rota} não encontrada`);
 });
 
+// TRATAMENTO DE ERROS
 app.use(tratarErros);
 
 // INICIAR O SERVIDOR

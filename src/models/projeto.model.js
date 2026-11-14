@@ -2,23 +2,23 @@ const prisma = require("../database/prisma");
 
 module.exports = {
   // Listar todos os projetos usando Prisma
-  listarProjetos: async () => {
-    return await prisma.projetos.findMany({
-      orderBy: {
-        nome: "asc",
-      },
-    });
-  },
+  listarProjetos: async (usuarioId) =>
+    prisma.projetos.findMany({
+      where: { usuario_id: Number(usuarioId) },
+      orderBy: { nome: "asc" },
+    }),
 
   // Buscar um projeto pelo ID usando Prisma
-  buscarProjeto: async (id) => {
-    const projeto = await prisma.projetos.findUnique({
-      where: { id: Number(id) },
+  buscarProjeto: async (id, usuarioId) => {
+    const projeto = await prisma.projetos.findFirst({
+      where: {
+        id: Number(id),
+        usuario_id: Number(usuarioId),
+      },
     });
 
     return projeto || null;
   },
-
   // Adicionar um projeto usando Prisma
   adicionarProjeto: async ({ nome, descricao, usuarioId }) => {
     return await prisma.projetos.create({
